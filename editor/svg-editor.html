@@ -35,26 +35,20 @@
 	<img class="tool_button" id="tool_save" src="images/save.png" title="Save Image [S]" alt="Save"/>
 	</div>
 
-    <!-- History buttons -->
-	<div>
-	<img class="tool_sep" src="images/sep.png" alt="|"/>
-	<img class="tool_button tool_button_disabled" id="tool_undo" src="images/undo.png" title="Undo [Z]" alt="Undo" />
-	<img class="tool_button tool_button_disabled" id="tool_redo" src="images/redo.png" title="Redo [Shift+Z/Y]" alt="Redo"/>
-	</div>
-
 	<!-- Buttons when something is selected -->
 	<div id="selected_panel">
 	<img class="tool_sep" src="images/sep.png" alt="|"/>
-	<img class="tool_button" id="tool_delete" src="images/delete.png" title="Delete Element [Delete/Backspace]" alt="Delete"/>
-	<img class="tool_button" id="tool_move_top" src="images/move_top.png" title="Move to Top [Shift+Up]" alt="Top"/>
-	<img class="tool_button" id="tool_move_bottom" src="images/move_bottom.png" title="Move to Bottom [Shift+Down]" alt="Bottom"/>
+	<img class="tool_button" id="tool_delete" src="images/delete.png" title="Delete Element [X]" alt="Delete"/>
+	<img class="tool_button" id="tool_move_top" src="images/move_top.png" title="Move to Top" alt="Top"/>
+	<img class="tool_button" id="tool_move_bottom" src="images/move_bottom.png" title="Move to Bottom" alt="Bottom"/>
 	</div>
 
+	<!-- TODO: also add x, y, width, height -->
 	<div id="rect_panel">
 		<img class="tool_sep" src="images/sep.png" alt="|"/>
-		<label class="rect_tool">Radius:</label>
+		<label class="rect_tool" >Radius:</label>
 		<!-- TODO: turn this into a spinner control! -->
-		<select id="rect_radius" class="rect_tool" title="Change rectangle corner radius" alt="Corner Radius">
+		<select id="rect_radius" class="rect_tool" title="Change Rectangle Corner Radius" alt="Corner Radius">
 			<option selected="selected" value="0">0</option>
 			<option value="1">1</option>
 			<option value="2">2</option>
@@ -65,49 +59,9 @@
 			<option value="15">15</option>
 			<option value="20">20</option>
 		</select>
-		<label class="rect_tool">x:</label>
-		<input id="rect_x" class="rect_tool attr_changer" title="Change rectangle X coordinate" alt="x" size="3"/>
-		<label class="rect_tool">y:</label>
-		<input id="rect_y" class="rect_tool attr_changer" title="Change rectangle Y coordinate" alt="y" size="3"/>
-		<label class="rect_tool">width:</label>
-		<input id="rect_w" class="rect_tool attr_changer" title="Change rectangle width" alt="width" size="3"/>
-		<label class="rect_tool">height:</label>
-		<input id="rect_h" class="rect_tool attr_changer" title="Change rectangle height" alt="height" size="3"/>
 	</div>
 
-	<div id="circle_panel">
-		<img class="tool_sep" src="images/sep.png" alt="|"/>
-		<label class="circle_tool">cx:</label>
-		<input id="circle_cx" class="circle_tool attr_changer" title="Change circle's cx coordinate" alt="cx" size="3"/>
-		<label class="circle_tool">cy:</label>
-		<input id="circle_cy" class="circle_tool attr_changer" title="Change circle's cy coordinate" alt="cy" size="3"/>
-		<label class="circle_tool">r:</label>
-		<input id="circle_r" class="circle_tool attr_changer" title="Change circle's radius" alt="r" size="3"/>
-	</div>
-	
-	<div id="ellipse_panel">
-		<img class="tool_sep" src="images/sep.png" alt="|"/>
-		<label class="ellipse_tool">cx:</label>
-		<input id="ellipse_cx" class="ellipse_tool attr_changer" title="Change ellipse's cx coordinate" alt="cx" size="3"/>
-		<label class="ellipse_tool">cy:</label>
-		<input id="ellipse_cy" class="ellipse_tool attr_changer" title="Change ellipse's cy coordinate" alt="cy" size="3"/>
-		<label class="ellipse_tool">rx:</label>
-		<input id="ellipse_rx" class="ellipse_tool attr_changer" title="Change ellipse's x radius" alt="rx" size="3"/>
-		<label class="ellipse_tool">ry:</label>
-		<input id="ellipse_ry" class="ellipse_tool attr_changer" title="Change ellipse's y radius" alt="ry" size="3"/>
-	</div>
-	
-	<div id="line_panel">
-		<img class="tool_sep" src="images/sep.png" alt="|"/>
-		<label class="line_tool">x1:</label>
-		<input id="line_x1" class="line_tool attr_changer" title="Change line's starting x coordinate" alt="x1" size="3"/>
-		<label class="line_tool">y1:</label>
-		<input id="line_y1" class="line_tool attr_changer" title="Change line's starting y coordinate" alt="y1" size="3"/>
-		<label class="line_tool">x2:</label>
-		<input id="line_x2" class="line_tool attr_changer" title="Change line's ending x coordinate" alt="x2" size="3"/>
-		<label class="line_tool">y2:</label>
-		<input id="line_y2" class="line_tool attr_changer" title="Change line's ending y coordinate" alt="x1" size="3"/>
-	</div>
+	<!-- TODO: add a circle_panel, ellipse_panel, line_panel -->
 
 	<div id="text_panel">
 		<img class="tool_sep" src="images/sep.png" alt="|"/>
@@ -135,7 +89,7 @@
 			<option value="96pt">96pt</option>
 			<option value="120pt">120pt</option>
 		</select>
-		<input id="text" class="text_tool" type="text" title="Change text contents" size="35"/>
+		<input id="text" class="text_tool" type="text" title="Change text contents" size="40"/>
 	</div>
 </div>
 
@@ -236,15 +190,7 @@
 </div>
 
 <div id="footer" class="tools_panel">
-<div id="footer_left">
-<select id="resolution">
-<option selected="selected">640x480</option>
-<option>800x600</option>
-<option>1024x768</option>
-</select>
-</div><div id ="footer_right">
-SVG-edit v2.2-preAlpha @ <a href="http://svg-edit.googlecode.com/">http://svg-edit.googlecode.com/</a>
-</div>
+SVG-edit v2.1 @ <a href="http://svg-edit.googlecode.com/">http://svg-edit.googlecode.com/</a>
 </div>
 
 </div>

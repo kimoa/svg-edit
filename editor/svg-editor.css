@@ -102,39 +102,15 @@
 	display: none;
 }
 
-#svg_editor #circle_panel {
-	display: none;
-}
-
-#svg_editor #ellipse_panel {
-	display: none;
-}
-
-#svg_editor #line_panel {
-	display: none;
-}
-
 #svg_editor #text_panel {
 	display: none;
 }
 
 #svg_editor #text_panel .text_tool {
-	vertical-align: 12px;
+	vertical-align:12px;
 }
 
 #svg_editor #rect_panel .rect_tool {
-	vertical-align: 12px;
-}
-
-#svg_editor #circle_panel .circle_tool {
-	vertical-align:12px;
-}
-
-#svg_editor #ellipse_panel .ellipse_tool {
-	vertical-align:12px;
-}
-
-#svg_editor #line_panel .line_tool {
 	vertical-align:12px;
 }
 
@@ -195,7 +171,7 @@
 }
 
 #svg_editor #tool_fhrect {
-	background: 2px 2px url('images/freehand-square.png') no-repeat;
+	background: 2px 2px url('images/path.png') no-repeat;
 }
 
 #svg_editor #tool_circle {
@@ -207,7 +183,7 @@
 }
 
 #svg_editor #tool_fhellipse {
-	background: 2px 2px url('images/freehand-circle.png') no-repeat;
+	background: 2px 2px url('images/path.png') no-repeat;
 }
 
 #svg_editor #tools_rect div, #svg_editor #tools_ellipse div {
@@ -224,12 +200,5 @@
 #svg_editor #footer {
 	width: 705px;
 	border-top: none;
-}
-
-#svg_editor #footer_left {
-	float: left;
-}
-
-#svg_editor #footer_right {
-	float: right;
+	text-align: right;
 }

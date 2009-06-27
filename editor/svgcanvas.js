@@ -1,97 +1,7 @@
-if(!window.console) {
-  window.console = new function() {
-    this.log = function(str) {};
-    this.dir = function(str) {};
-  };
-}
-
-// These command objects are used for the Undo/Redo stack
-// attrs contains the values that the attributes had before the change
-function ChangeElementCommand(elem, attrs, text) {
-	this.elem = elem;
-	this.text = text ? ("Change " + elem.tagName + " " + text) : ("Change " + elem.tagName);
-	this.newValues = {};
-	this.oldValues = attrs;
-	for (attr in attrs) {
-		if (attr == "#text") this.newValues[attr] = elem.textContent;
-		else this.newValues[attr] = elem.getAttribute(attr);
-	}
-	
-	this.apply = function() {
-		for( attr in this.newValues ) {
-			if (this.newValues[attr]) {
-				if (attr == "#text") this.elem.textContent = this.newValues[attr];
-				else this.elem.setAttribute(attr, this.newValues[attr]);
-			}
-			else {
-				if (attr != "#text") this.elem.textContent = "";
-				else this.elem.removeAttribute(attr);
-			}
-		}
-		return true;
-	};
-	
-	this.unapply = function() {
-		for( attr in this.oldValues ) {
-			if (this.oldValues[attr]) {
-				if (attr == "#text") this.elem.textContent = this.oldValues[attr];
-				else this.elem.setAttribute(attr, this.oldValues[attr]);
-			}
-			else {
-				if (attr == "#text") this.elem.textContent = "";
-				else this.elem.removeAttribute(attr);
-			}
-		}
-		return true;
-	};
-}
-
-function InsertElementCommand(elem, text) {
-	this.elem = elem;
-	this.text = text || ("Create " + elem.tagName);
-	this.parent = elem.parentNode;
-
-	this.apply = function() { this.elem = this.parent.insertBefore(this.elem, this.elem.nextSibling); };
-	
-	this.unapply = function() {
-		this.parent = this.elem.parentNode;
-		this.elem = this.elem.parentNode.removeChild(this.elem);
-	};
-}
-
-function RemoveElementCommand(elem, parent, text) {
-	this.elem = elem;
-	this.text = text || ("Delete " + elem.tagName);
-	this.parent = parent;
-
-	this.apply = function() {
-		this.parent = this.elem.parentNode;
-		this.elem = this.parent.removeChild(this.elem); 
-	};
-
-	this.unapply = function() { this.elem = this.parent.insertBefore(this.elem, this.elem.nextSibling); };
-}
-
-function MoveElementCommand(elem, oldNextSibling, oldParent, text) {
-	this.elem = elem;
-	this.text = text ? ("Move " + elem.tagName + " to " + text) : ("Move " + elem.tagName + "top/bottom");
-	this.oldNextSibling = oldNextSibling;
-	this.oldParent = oldParent;
-	this.newNextSibling = elem.nextSibling;
-	this.newParent = elem.parentNode;
-	
-	this.apply = function() { 
-		this.elem = this.newParent.insertBefore(this.elem, this.newNextSibling);
-	};
-	
-	this.unapply = function() { 
-		this.elem = this.oldParent.insertBefore(this.elem, this.oldNextSibling);
-	};
-}
+var svgcanvas = null;
 
 function SvgCanvas(c)
 {
-
 
 // private members
 	var canvas = this;
@@ -112,8 +22,7 @@ function SvgCanvas(c)
 	var obj_num = 1;
 	var start_x = null;
 	var start_y = null;
-	var current_mode = "select";
-	var current_resize_mode = "none";
+	var current_mode = "path";
 	var current_fill = "none";
 	var current_stroke = "black";
 	var current_stroke_width = 1;
@@ -129,43 +38,12 @@ function SvgCanvas(c)
 	var freehand_max_y = null;
 	var selected = null;
 	var selectedOutline = null;
-	var selectedBBox = null;
-	var selectedGrips = { 	"nw":null,
-							"n":null,
-							"ne":null,
-							"w":null,
-							"e":null,
-							"sw":null,
-							"s":null,
-							"se":null,
-						};
-	var selectedOperation = 'resize'; // could be {resize,rotate}
 	var events = {};
-
-	var undoStackPointer = 0;
-	var undoStack = [];
-	
-	// FIXME: we MUST compress consecutive text changes to the same element 
-	// (right now each keystroke is saved as a separate command that includes the
-	// entire text contents of the text element)
-	// TODO: consider limiting the history that we store here (need to do some slicing)
-	function addCommandToHistory(cmd) {
-		// if our stack pointer is not at the end, then we have to remove
-		// all commands after the pointer and insert the new command
-		if (undoStackPointer < undoStack.length && undoStack.length > 0) {
-			undoStack = undoStack.splice(0, undoStackPointer);
-		}
-		undoStack[undoStack.length] = cmd;
-		undoStackPointer = undoStack.length;
-//		console.log("after add command, stackPointer=" + undoStackPointer);
-//		console.log(undoStack);		
-	}
-
 
 // private functions
 	var getId = function() {
-		if (events["getid"]) return call("getid", obj_num);
-		return idprefix + obj_num;
+	    if (events["getid"]) return call("getid",obj_num);
+		return idprefix+obj_num;
 	}
 
 	var call = function(event, arg) {
@@ -213,7 +91,7 @@ function SvgCanvas(c)
 			var attr;
 			var i;
 			var childs = elem.childNodes;
-			for (i=0; i<indent; i++) out += " ";
+			for (i=0; i<indent; i++) out += "  ";
 			out += "<" + elem.nodeName;
 			for (i=attrs.length-1; i>=0; i--) {
 				attr = attrs.item(i);
@@ -222,204 +100,49 @@ function SvgCanvas(c)
 				}
 			}
 			if (elem.hasChildNodes()) {
-				out += ">";
+				out += ">\n";
 				indent++;
-				var bOneLine = false;
 				for (i=0; i<childs.length; i++)
 				{
 					if (childs.item(i).nodeType == 1) { // element node
-						out += "\n" + svgToString(childs.item(i), indent);
+						out = out + svgToString(childs.item(i), indent);
 					} else if (childs.item(i).nodeType == 3) { // text node
-						bOneLine = true;
+						for (j=0; j<indent; j++) out += "  ";
 						out += childs.item(i).nodeValue + "";
 					}
 				}
 				indent--;
-				if (!bOneLine) { 
-					out += "\n"; 
-					for (i=0; i<indent; i++) out += " ";
-				}
-				out += "</" + elem.nodeName + ">";
+				for (i=0; i<indent; i++) out += "  ";
+				out += "</" + elem.nodeName + ">\n";
 			} else {
-				out += "/>";
+				out += " />\n";
 			}
 		}
 		return out;
 	} // end svgToString()
 
-	function recalculateSelectedDimensions() {
-		var box = selected.getBBox();
-		
-		// if we have not moved/resized, then immediately leave
-		if (box.x == selectedBBox.x && box.y == selectedBBox.y && 
-			box.width == selectedBBox.width && box.height == selectedBBox.height) {
-			return;
-		}
-		
-		// after this point, we have some change
-		
-		var remapx = function(x) {return ((x-box.x)/box.width)*selectedBBox.width + selectedBBox.x;}
-		var remapy = function(y) {return ((y-box.y)/box.height)*selectedBBox.height + selectedBBox.y;}
-		var scalew = function(w) {return w*selectedBBox.width/box.width;}
-		var scaleh = function(h) {return h*selectedBBox.height/box.height;}
-		
-		var changes = {};
-
-		selected.removeAttribute("transform");
-		switch (selected.tagName)
-		{
-			case "path":
-				// extract the x,y from the path, adjust it and write back the new path
-				// but first, save the old path
-				changes["d"] = selected.getAttribute("d");
-				var M = selected.pathSegList.getItem(0);
-				var curx = M.x, cury = M.y;
-				var newd = "M" + remapx(curx) + "," + remapy(cury);
-				for (var i = 1; i < selected.pathSegList.numberOfItems; ++i) {
-					var l = selected.pathSegList.getItem(i);
-					var x = l.x, y = l.y;
-					// webkit browsers normalize things and this becomes an absolute
-					// line segment!  we need to turn this back into a rel line segment
-					// see https://bugs.webkit.org/show_bug.cgi?id=26487
-					if (l.pathSegType == 4) {
-						x -= curx;
-						y -= cury;
-						curx += x;
-						cury += y;
-					}
-					// we only need to scale the relative coordinates (no need to translate)
-					newd += " l" + scalew(x) + "," + scaleh(y);
-				}
-				selected.setAttributeNS(null, "d", newd);
-				break;
-			case "line":
-				changes["x1"] = selected.x1.baseVal.value;
-				changes["y1"] = selected.y1.baseVal.value;
-				changes["x2"] = selected.x2.baseVal.value;
-				changes["y2"] = selected.y2.baseVal.value;
-				selected.x1.baseVal.value = remapx(selected.x1.baseVal.value);
-				selected.y1.baseVal.value = remapy(selected.y1.baseVal.value);
-				selected.x2.baseVal.value = remapx(selected.x2.baseVal.value);
-				selected.y2.baseVal.value = remapy(selected.y2.baseVal.value);
-				break;
-			case "circle":
-				changes["cx"] = selected.cx.baseVal.value;
-				changes["cy"] = selected.cy.baseVal.value;
-				changes["r"] = selected.r.baseVal.value;			
-				selected.cx.baseVal.value = remapx(selected.cx.baseVal.value);
-				selected.cy.baseVal.value = remapy(selected.cy.baseVal.value);
-				// take the minimum of the new selected box's dimensions for the new circle radius
-				selected.r.baseVal.value = Math.min(selectedBBox.width/2,selectedBBox.height/2);
-				break;
-			case "ellipse":
-				changes["cx"] = selected.cx.baseVal.value;
-				changes["cy"] = selected.cy.baseVal.value;
-				changes["rx"] = selected.rx.baseVal.value;
-				changes["ry"] = selected.ry.baseVal.value;
-				selected.cx.baseVal.value = remapx(selected.cx.baseVal.value);
-				selected.cy.baseVal.value = remapy(selected.cy.baseVal.value);
-				selected.rx.baseVal.value = scalew(selected.rx.baseVal.value);
-				selected.ry.baseVal.value = scaleh(selected.ry.baseVal.value);
-				break;
-			case "text":
-				// cannot use x.baseVal.value here because x is a SVGLengthList
-				changes["x"] = selected.getAttribute("x");
-				changes["y"] = selected.getAttribute("y");
-				selected.setAttribute("x", remapx(selected.getAttribute("x")));
-				selected.setAttribute("y", remapy(selected.getAttribute("y")));
-				break;
-			case "rect":
-				changes["x"] = selected.x.baseVal.value;
-				changes["y"] = selected.y.baseVal.value;
-				changes["width"] = selected.width.baseVal.value;
-				changes["height"] = selected.height.baseVal.value;
-				selected.x.baseVal.value = remapx(selected.x.baseVal.value);
-				selected.y.baseVal.value = remapy(selected.y.baseVal.value);
-				selected.width.baseVal.value = scalew(selected.width.baseVal.value);
-				selected.height.baseVal.value = scaleh(selected.height.baseVal.value);
-				break;
-			default: // rect
-				console.log("Unknown shape type: " + selected.tagName);
-				break;
-		}
-		// fire changed event
-		if (changes) {
-			var text = (current_resize_mode == "none" ? "position" : "size");
-			addCommandToHistory(new ChangeElementCommand(selected, changes, text));
-		}
-		call("changed", selected);
-	}
-
-	var recalculateSelectedOutline = function() {
-		if (selected != null && selectedOutline != null) {
-			var bbox = selectedBBox;
-			var selectedBox = selectedOutline.firstChild;
-			var sw = parseInt(selected.getAttribute("stroke-width"));
-			var offset = 1;
-			if (!isNaN(sw)) {
-				offset += sw/2;
-			}
-			if (selected.tagName == "text") {
-				offset += 2;
-			}
-			var l=bbox.x-offset, t=bbox.y-offset, w=bbox.width+(offset<<1), h=bbox.height+(offset<<1);
-			selectedBox.x.baseVal.value = l;
-			selectedBox.y.baseVal.value = t;
-			selectedBox.width.baseVal.value = w;
-			selectedBox.height.baseVal.value = h;
-			selectedGrips.nw.x.baseVal.value = l-3;
-			selectedGrips.nw.y.baseVal.value = t-3;
-			selectedGrips.ne.x.baseVal.value = l+w-3;
-			selectedGrips.ne.y.baseVal.value = t-3;
-			selectedGrips.sw.x.baseVal.value = l-3;
-			selectedGrips.sw.y.baseVal.value = t+h-3;
-			selectedGrips.se.x.baseVal.value = l+w-3;
-			selectedGrips.se.y.baseVal.value = t+h-3;
-			selectedGrips.n.x.baseVal.value = l+w/2-3;
-			selectedGrips.n.y.baseVal.value = t-3;
-			selectedGrips.w.x.baseVal.value = l-3;
-			selectedGrips.w.y.baseVal.value = t+h/2-3;
-			selectedGrips.e.x.baseVal.value = l+w-3;
-			selectedGrips.e.y.baseVal.value = t+h/2-3;
-			selectedGrips.s.x.baseVal.value = l+w/2-3;
-			selectedGrips.s.y.baseVal.value = t+h-3;
-		}
-	}
-
 // public events
 	// call this function to set the selected element
 	// call this function with null to clear the selected element
-	var selectElement = function(newSelected)
+	var selectElement = function(newSelected) 
 	{
 		if (selected == newSelected) return;
-
+		
 		// remove selected outline from previously selected element
 		if (selected != null && selectedOutline != null) {
-			// remove from DOM and store reference in JS but only if it exists in the DOM
+			// remove from DOM and store reference in JS (but only if it actually exists)
 			try {
 				var theOutline = svgroot.removeChild(selectedOutline);
 				selectedOutline = theOutline;
 			} catch(e) { }
 		}
-
+		
 		selected = newSelected;
-
+		
 		if (selected != null) {
-			selectedBBox = selected.getBBox();
-
 			// we create this element for the first time here
 			if (selectedOutline == null) {
-				// create a group that will hold all the elements that make
-				// up the selected outline
 				selectedOutline = addSvgElementFromJson({
-					"element": "g",
-					"attr": {
-						"id": "selectedGroup",
-					}
-				});
-
-				// add the bounding box
-				selectedOutline.appendChild( addSvgElementFromJson({
 					"element": "rect",
 					"attr": {
 						"id": "selectedBox",
@@ -432,39 +155,27 @@ function SvgCanvas(c)
 						// need to specify this style so that the selectedOutline is not selectable
 						"style": "pointer-events:none",
 					}
+				});
+				// TODO: add SMIL animate child on stroke-dashoffset here
+				// This only works in Opera, but it appears to cause some
+				// problem when more than one selected element is in the canvas?
+				/*
+				selectedOutline.appendChild( addSvgElementFromJson({
+					"element": "animate",
+					"attr": {
+						"attributeName": "stroke-dashoffset",
+						"repeatCount": "indefinite",
+						"dur": "500ms",
+						"from": "0",
+						"to": "10",
+					}
 				}) );
-
-				// add the corner grips
-				for (dir in selectedGrips) {
-					selectedGrips[dir] = selectedOutline.appendChild( addSvgElementFromJson({
-							"element": "rect",
-							"attr": {
-								"id": dir + "_grip",
-								"fill": "blue",
-								"width": 6,
-								"height": 6,
-								"style": ("cursor:" + dir + "-resize"),
-								// when we are in rotate mode, we will set rx/ry to 3
-//								"rx": 3,
-//								"ry": 3,
-								// This expands the mouse-able area of the grips making them
-								// easier to grab with the mouse.
-								// This works in Opera and WebKit, but does not work in Firefox
-								// see https://bugzilla.mozilla.org/show_bug.cgi?id=500174
-								"stroke-width": 2,
-								"pointer-events": "all",
-							}
-					}) );
-					$('#'+selectedGrips[dir].id).mousedown( function() {
-						current_mode = "resize";
-						current_resize_mode = this.id.substr(0,this.id.indexOf("_"));
-					});
-				}
+				*/
 			}
 			// recalculate size and then re-append to bottom of document
 			recalculateSelectedOutline();
 			svgroot.appendChild(selectedOutline);
-
+			
 			// set all our current styles to the selected styles
 			current_fill = selected.getAttribute("fill");
 			current_fill_opacity = selected.getAttribute("fill-opacity");
@@ -476,22 +187,29 @@ function SvgCanvas(c)
 				current_font_size = selected.getAttribute("font-size");
 				current_font_family = selected.getAttribute("font-family");
 			}
-
-			// do now show resize grips on text elements
-			var gripDisplay = (selected.tagName == "text" ? "none" : "inline");
-			for (dir in selectedGrips) {
-				selectedGrips[dir].setAttribute("display", gripDisplay);
-			}
 		}
-
+		
 		call("selected", selected);
 	}
+	
+	var recalculateSelectedOutline = function() {
+		if (selected != null && selectedOutline != null) {
+			var bbox = selected.getBBox();
+			var sw = parseInt(selected.getAttribute("stroke-width"));
+			var offset = 1;
+			if (!isNaN(sw)) {
+				offset += sw/2;
+			}
+			if (selected.tagName == "text") {
+				offset += 2;
+			}
+			selectedOutline.setAttribute("x", bbox.x-offset);
+			selectedOutline.setAttribute("y", bbox.y-offset);
+			selectedOutline.setAttribute("width", bbox.width+(offset<<1));
+			selectedOutline.setAttribute("height", bbox.height+(offset<<1));
+		}	
+	}
 
-	// in mouseDown :
-	// - when we are in a create mode, the element is added to the canvas
-	//   but the action is not recorded until mouseUp
-	// - when we are in select mode, select the element, remember the position 
-	//   and do nothing else
 	var mouseDown = function(evt)
 	{
 		var x = evt.pageX - container.offsetLeft;
@@ -501,18 +219,12 @@ function SvgCanvas(c)
 				started = true;
 				start_x = x;
 				start_y = y;
-				current_resize_mode = "none";
 				var t = evt.target;
 				// WebKit returns <div> when the canvas is clicked, Firefox/Opera return <svg>
 				if (t.nodeName.toLowerCase() == "div" || t.nodeName.toLowerCase() == "svg") {
 					t = null;
 				}
 				selectElement(t);
-				break;
-			case "resize":
-				started = true;
-				start_x = x;
-				start_y = y;
 				break;
 			case "fhellipse":
 			case "fhrect":
@@ -540,8 +252,6 @@ function SvgCanvas(c)
 				freehand_max_y = y;
 				break;
 			case "square":
-				// FIXME: once we create the rect, we lose information that this was a square
-				// (for resizing purposes this is important)
 			case "rect":
 				started = true;
 				start_x = x;
@@ -647,8 +357,6 @@ function SvgCanvas(c)
 		}
 	}
 
-	// in mouseMove we do not record any state changes yet (but we do update 
-	// any elements that are still being created, moved or resized on the canvas)
 	var mouseMove = function(evt)
 	{
 		if (!started) return;
@@ -664,56 +372,9 @@ function SvgCanvas(c)
 				if (selected != null && selectedOutline != null) {
 					var dx = x - start_x;
 					var dy = y - start_y;
-					selectedBBox = selected.getBBox();
-					selectedBBox.x += dx;
-					selectedBBox.y += dy;
-					var ts = "translate(" + dx + "," + dy + ")";
-					selected.setAttribute("transform", ts);
-					recalculateSelectedOutline();
+					selected.setAttributeNS(null, "transform", "translate(" + dx + "," + dy + ")");
+					selectedOutline.setAttributeNS(null, "transform", "translate(" + dx + "," + dy + ")");
 				}
-				break;
-			case "resize":
-				// we track the resize bounding box and translate/scale the selected element
-				// while the mouse is down, when mouse goes up, we use this to recalculate
-				// the shape's coordinates
-				var box=selected.getBBox(), left=box.x, top=box.y, width=box.width,
-					height=box.height, dx=(x-start_x), dy=(y-start_y);
-				var tx=0, ty=0, sx=1, sy=1;
-				var ts = null;
-				if(current_resize_mode.indexOf("n") != -1) {
-					ty = dy;
-					sy = (height-dy)/height;
-				}
-				else if(current_resize_mode.indexOf("s") != -1) {
-					sy = (height+dy)/height;
-				}
-				if(current_resize_mode.indexOf("e") != -1) {
-					sx = (width+dx)/width;
-				}
-				else if(current_resize_mode.indexOf("w") != -1) {
-					tx = dx;
-					sx = (width-dx)/width;
-				}
-
-				selectedBBox.x = left+tx;
-				selectedBBox.y = top+ty;
-				selectedBBox.width = width*sx;
-				selectedBBox.height = height*sy;
-				// normalize selectedBBox
-				if (selectedBBox.width < 0) {
-					selectedBBox.x += selectedBBox.width;
-					selectedBBox.width = -selectedBBox.width;
-				}
-				if (selectedBBox.height < 0) {
-					selectedBBox.y += selectedBBox.height;
-					selectedBBox.height = -selectedBBox.height;
-				}
-
-
-				ts = "translate(" + (left+tx) + "," + (top+ty) + ") scale(" + (sx) + "," + (sy) +
-						") translate(" + (-left) + "," + (-top) + ")";
-				selected.setAttribute("transform", ts);
-				recalculateSelectedOutline();
 				break;
 			case "text":
 				shape.setAttribute("x", x);
@@ -765,16 +426,8 @@ function SvgCanvas(c)
 				shape.setAttributeNS(null, "d", d_attr);
 				break;
 		}
-		// fire changed event
-		call("changed", selected);		
 	}
 
-	// in mouseUp, this is where the command is stored for later undo:
-	// - in create mode, the element's opacity is set properly, we create an InsertElementCommand
-	//   and store it on the Undo stack
-	// - in move/resize mode, the element's attributes which were affected by the move/resize are
-	//   identified, a ChangeElementCommand is created and stored on the stack for those attrs
-	//   this is done in recalculateSelectedDimensions()
 	var mouseUp = function(evt)
 	{
 		if (!started) return;
@@ -784,13 +437,63 @@ function SvgCanvas(c)
 		var keep = false;
 		switch (current_mode)
 		{
-			// fall-through to select here
-			case "resize":
-				current_mode = "select";
 			case "select":
 				if (selected != null) {
-					recalculateSelectedDimensions();
-					recalculateSelectedOutline();
+					var dx = evt.pageX - container.offsetLeft - start_x;
+					var dy = evt.pageY - container.offsetTop - start_y;
+					selected.removeAttribute("transform");
+					selectedOutline.removeAttribute("transform");
+					switch (selected.tagName)
+					{
+						case "path":
+							// extract the x,y from the path, adjust it and write back the new path
+							var M = selected.pathSegList.getItem(0);
+							var curx = M.x, cury = M.y;
+							var newd = "M" + (curx+dx) + "," + (cury+dy);
+							for (var i = 1; i < selected.pathSegList.numberOfItems; ++i) {
+								var l = selected.pathSegList.getItem(i);
+								var x = l.x, y = l.y;
+								// webkit browsers normalize things and this becomes an absolute
+								// line segment!  we need to turn this back into a rel line segment
+								// see https://bugs.webkit.org/show_bug.cgi?id=26487
+								if (l.pathSegType == 4) {
+									x -= curx;
+									y -= cury;
+									curx += x;
+									cury += y;
+								}
+								newd += " l" + x + "," + y;
+							}
+							selected.setAttributeNS(null, "d", newd);
+							break;
+						case "line":
+							var x1 = parseInt(selected.getAttributeNS(null, "x1"));
+							var y1 = parseInt(selected.getAttributeNS(null, "y1"));
+							var x2 = parseInt(selected.getAttributeNS(null, "x2"));
+							var y2 = parseInt(selected.getAttributeNS(null, "y2"));
+							selected.setAttributeNS(null, "x1", x1+dx);
+							selected.setAttributeNS(null, "y1", y1+dy);
+							selected.setAttributeNS(null, "x2", x2+dx);
+							selected.setAttributeNS(null, "y2", y2+dy);
+							break;
+						case "circle":
+						case "ellipse":
+							var cx = parseInt(selected.getAttributeNS(null, "cx"));
+							var cy = parseInt(selected.getAttributeNS(null, "cy"));
+							selected.setAttributeNS(null, "cx", cx+dx);
+							selected.setAttributeNS(null, "cy", cy+dy);
+							break;
+						default: // rect
+							var x = parseInt(selected.getAttributeNS(null, "x"));
+							var y = parseInt(selected.getAttributeNS(null, "y"));
+							selected.setAttributeNS(null, "x", x+dx);
+							selected.setAttributeNS(null, "y", y+dy);
+							break;
+					}
+					var sx = parseInt(selectedOutline.getAttributeNS(null, "x"));
+					var sy = parseInt(selectedOutline.getAttributeNS(null, "y"));
+					selectedOutline.setAttributeNS(null, "x", sx+dx);
+					selectedOutline.setAttributeNS(null, "y", sy+dy);
 					// we return immediately from select so that the obj_num is not incremented
 					return;
 				}
@@ -873,9 +576,6 @@ function SvgCanvas(c)
 		} else if (element != null) {
 			element.setAttribute("opacity", current_opacity);
 			cleanupElement(element);
-			// we create the insert command that is stored on the stack
-			// undo means to call cmd.unapply(), redo means to call cmd.apply()
-			addCommandToHistory(new InsertElementCommand(element));
 			call("changed",element);
 		}
 	}
@@ -886,8 +586,7 @@ function SvgCanvas(c)
 		// remove the selected outline before serializing
 		this.selectNone();
 		var str = "<?xml version=\"1.0\" standalone=\"no\"?>\n";
-		// see http://jwatt.org/svg/authoring/#doctype-declaration
-//		str += "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n";
+		str += "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n";
 		str += svgToString(svgroot, 0);
 		this.saveHandler(str);
 	}
@@ -907,15 +606,6 @@ function SvgCanvas(c)
 		call("cleared");
 	}
 
-	this.setResolution = function(x, y) {
-		var w = svgroot.getAttribute("width"),
-			h = svgroot.getAttribute("height");
-		svgroot.setAttribute("width", x);
-		svgroot.setAttribute("height", y);
-		addCommandToHistory(new ChangeElementCommand(svgroot, {"width":w,"height":h}, "resolution"));
-		call("changed", svgroot);
-	}
-
 	this.getMode = function() {
 		return current_mode;
 	}
@@ -928,18 +618,24 @@ function SvgCanvas(c)
 		return current_stroke;
 	}
 
-	this.setStrokeColor = function(val) {
-		current_stroke = val;
-		this.changeSelectedAttribute("stroke", val);
+	this.setStrokeColor = function(color) {
+		current_stroke = color;
+		if (selected != null) {
+			selected.setAttribute("stroke", color);
+			call("changed", selected);
+		}
 	}
 
 	this.getFillColor = function() {
 		return current_fill;
 	}
 
-	this.setFillColor = function(val) {
-		current_fill = val;
-		this.changeSelectedAttribute("fill", val);
+	this.setFillColor = function(color) {
+		current_fill = color;
+		if (selected != null) {
+			selected.setAttribute("fill", color);
+			call("changed", selected);
+		}
 	}
 
 	this.getStrokeWidth = function() {
@@ -948,7 +644,11 @@ function SvgCanvas(c)
 
 	this.setStrokeWidth = function(val) {
 		current_stroke_width = val;
-		this.changeSelectedAttribute("stroke-width", val);
+		if (selected != null) {
+			selected.setAttribute("stroke-width", val);
+			recalculateSelectedOutline();
+			call("changed", selected);
+		}
 	}
 
 	this.getStrokeStyle = function() {
@@ -957,7 +657,10 @@ function SvgCanvas(c)
 
 	this.setStrokeStyle = function(val) {
 		current_stroke_style = val;
-		this.changeSelectedAttribute("stroke-dasharray", val);
+		if (selected != null) {
+			selected.setAttribute("stroke-dasharray", val);
+			call("changed", selected);
+		}
 	}
 
 	this.getOpacity = function() {
@@ -966,7 +669,10 @@ function SvgCanvas(c)
 
 	this.setOpacity = function(val) {
 		current_opacity = val;
-		this.changeSelectedAttribute("opacity", val);
+		if (selected != null) {
+			selected.setAttribute("opacity", val);
+			call("changed", selected);
+		}
 	}
 
 	this.getFillOpacity = function() {
@@ -975,7 +681,10 @@ function SvgCanvas(c)
 
 	this.setFillOpacity = function(val) {
 		current_fill_opacity = val;
-		this.changeSelectedAttribute("fill-opacity", val);
+		if (selected != null) {
+			selected.setAttribute("fill-opacity", val);
+			call("changed", selected);
+		}
 	}
 
 	this.getStrokeOpacity = function() {
@@ -984,7 +693,10 @@ function SvgCanvas(c)
 
 	this.setStrokeOpacity = function(val) {
 		current_stroke_opacity = val;
-		this.changeSelectedAttribute("stroke-opacity", val);
+		if (selected != null) {
+			selected.setAttribute("stroke-opacity", val);
+			call("changed", selected);
+		}
 	}
 
 	this.updateElementFromJson = function(data) {
@@ -1018,63 +730,56 @@ function SvgCanvas(c)
 	this.getFontFamily = function() {
 		return current_font_family;
 	}
-
+        
 	this.setFontFamily = function(val) {
     	current_font_family = val;
-		this.changeSelectedAttribute("font-family", val);    	
+		if (selected != null) {
+			selected.setAttribute("font-family", val);
+			recalculateSelectedOutline();
+			call("changed", selected);
+		}
 	}
 
 	this.getFontSize = function() {
 		return current_font_size;
 	}
-
+	
 	this.setFontSize = function(val) {
 		current_font_size = val;
-		this.changeSelectedAttribute("font-size", val);
+		if (selected != null) {
+			selected.setAttribute("font-size", val);
+			recalculateSelectedOutline();
+			call("changed", selected);
+		}
 	}
-
+	
 	this.getText = function() {
 		if (selected == null) { return ""; }
 		return selected.textContent;
 	}
-
+	
 	this.setTextContent = function(val) {
-		this.changeSelectedAttribute("#text", val);
-	}
-
-	this.setRectRadius = function(val) {
-		if (selected != null && selected.tagName == "rect") {
-			var r = selected.getAttribute("rx");
-			if (r != val) {
-				selected.setAttribute("rx", val);
-				selected.setAttribute("ry", val);
-				addCommandToHistory(new ChangeElementCommand(selected, {"rx":r, "ry":r}, "Radius"));
-				call("changed", selected);
-			}
+		if (selected != null) {
+			selected.textContent = val;
+			recalculateSelectedOutline();
+			call("changed", selected);
 		}
 	}
 	
-	this.changeSelectedAttribute = function(attr, val) {
-		if (selected != null) {
-			var oldval = (attr == "#text" ? selected.textContent : selected.getAttribute(attr));
-			if (oldval != val) {
-				if (attr == "#text") selected.textContent = val;
-				else selected.setAttribute(attr, val);
-				selectedBBox = selected.getBBox();
-				recalculateSelectedOutline();
-				var changes = {};
-				changes[attr] = oldval;
-				addCommandToHistory(new ChangeElementCommand(selected, changes, attr));
-				call("changed", selected);
-			}
+	this.setRectRadius = function(val) {
+		if (selected != null && selected.tagName == "rect") {
+			selected.setAttribute("rx", val);
+			selected.setAttribute("rx", val);
+			call("changed", selected);
 		}
 	}
-
+	
 	$(container).mouseup(mouseUp);
 	$(container).mousedown(mouseDown);
 	$(container).mousemove(mouseMove);
 
 	this.saveHandler = function(svg) {
+		//alert(svg);
 		window.open("data:image/svg+xml;base64," + Utils.encode64(svg));
 	}
 
@@ -1084,70 +789,26 @@ function SvgCanvas(c)
 
 	this.deleteSelectedElement = function() {
 		if (selected != null) {
-			var parent = selected.parentNode;
 			var t = selected;
 			// this will unselect the element (and remove the selectedOutline)
 			selectElement(null);
-			var elem = parent.removeChild(t);
-			addCommandToHistory(new RemoveElementCommand(elem, parent));
+			t.parentNode.removeChild(t);
+			call("deleted",t);
 		}
 	}
 
 	this.moveToTopSelectedElement = function() {
 		if (selected != null) {
 			var t = selected;
-			var oldParent = t.parentNode;
-			var oldNextSibling = t.nextSibling;
-			if (oldNextSibling == selectedOutline) oldNextSibling = null;
-			t = t.parentNode.appendChild(t);
-			addCommandToHistory(new MoveElementCommand(t, oldNextSibling, oldParent, "top"));
+			t.parentNode.appendChild(t);
 		}
 	}
 
 	this.moveToBottomSelectedElement = function() {
 		if (selected != null) {
 			var t = selected;
-			var oldParent = t.parentNode;
-			var oldNextSibling = t.nextSibling;
-			if (oldNextSibling == selectedOutline) oldNextSibling = null;
-			t = t.parentNode.insertBefore(t, t.parentNode.firstChild);
-			addCommandToHistory(new MoveElementCommand(t, oldNextSibling, oldParent, "bottom"));
+			t.parentNode.insertBefore(t, t.parentNode.firstChild);
 		}
-	}
-	
-	this.moveSelectedElement = function(dx,dy) {
-		if (selected != null) {
-			selectedBBox = selected.getBBox();
-			selectedBBox.x += dx;
-			selectedBBox.y += dy;
-			
-			recalculateSelectedDimensions();
-			recalculateSelectedOutline();
-		}
-	}
-
-	this.getUndoStackSize = function() { return undoStackPointer; }
-	this.getRedoStackSize = function() { return undoStack.length - undoStackPointer; }
-	
-	this.undo = function() {
-		if (undoStackPointer > 0) { 
-			this.selectNone();
-			var cmd = undoStack[--undoStackPointer];
-			cmd.unapply();
-			call("changed", cmd.elem);
-		}
-//		console.log("after undo, stackPointer=" + undoStackPointer);
-//		console.log(undoStack);		
-	}
-	this.redo = function() {
-		if (undoStackPointer < undoStack.length && undoStack.length > 0) {
-			this.selectNone();
-			var cmd = undoStack[undoStackPointer++];
-			cmd.apply();
-			call("changed", cmd.elem);
-		}
-//		console.log("after redo, stackPointer=" + undoStackPointer);
-//		console.log(undoStack);		
 	}
 
 }
@@ -1160,7 +821,7 @@ var Utils = {
 // public domain.  It would be nice if you left this header intact.
 // Base64 code from Tyler Akins -- http://rumkin.com
 
-// schiller: Removed string concatenation in favour of Array.join() optimization,
+// schiller: Removed string concatenation in favour of Array.join() optimization, 
 //           also precalculate the size of the array needed.
 
 	"_keyStr" : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
